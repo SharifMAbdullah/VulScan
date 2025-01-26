@@ -1,88 +1,121 @@
 from flask import Flask, request, jsonify
 import requests
 import json
+import re
 from textwrap import dedent
 
 app = Flask(__name__)
 
-@app.route("/analyze", methods=["POST"])
-def analyze_code():
+def extract_functions(c_file_content):
+    """
+    Extract individual C functions from the given C file content.
+    """
+    # Regex to match C function definitions
+    function_pattern = re.compile(
+        r"""
+        # Match the return type (e.g., int, void, float, etc.)
+        (?:\b(?:int|void|char|float|double|long|short|struct)\b\s+)
+        # Match pointers or whitespace before function name
+        \**\w+\s*
+        # Match function arguments in parentheses
+        \([^)]*\)\s*
+        # Match function body enclosed in braces
+        \{
+            (?:[^{}]*\{[^{}]*\}[^{}]*)*[^{}]*
+        \}
+        """,
+        re.DOTALL | re.VERBOSE,
+    )
+    return function_pattern.findall(c_file_content)
+
+def analyze_function_with_ollama(function):
+    """
+    Analyze a single C function for vulnerabilities using the Ollama API.
+    """
+    prompt = dedent(f"""
+        Analyze the following C code for potential vulnerabilities and provide ratings for the following metrics. Provide only the metrics, no reasoning.
+
+        - Confidentiality
+        - Integrity
+        - Availability
+        - Access Gained
+        - Attack Origin
+        - Authentication Required
+        - Complexity
+
+        Code: {function}
+
+        Response format:
+        Confidentiality: [Complete/Partial/None]
+        Integrity: [Complete/Partial/None]
+        Availability: [Complete/Partial/None]
+        AccessGained: [Admin/User/None]
+        AttackOrigin: [Remote/Local]
+        AuthenticationRequired: [Single/None]
+        Complexity: [High/Medium/Low/None]
+    """).strip()
+
     try:
-        data = request.get_json()
-        code_snippet = data.get("code", "")
-
-        if not code_snippet:
-            return jsonify({"error": "Code snippet is required"}), 400
-
-        prompt = dedent(f"""
-            Analyze the following C code for potential vulnerabilities and provide ratings for the following metrics. Provide only the metrics, no reasoning.
-
-            - Confidentiality
-            - Integrity
-            - Availability
-
-            Code: {code_snippet}
-
-            Response format:
-            Confidentiality: [High/Medium/Low]
-            Integrity: [High/Medium/Low]
-            Availability: [High/Medium/Low]
-            """).strip()
-
         response = requests.post(
             "http://localhost:11434/api/generate",
             json={"model": "codegemma", "prompt": prompt},
             stream=True
         )
-
         if response.status_code != 200:
-            return jsonify({"error": f"Ollama API request failed with status {response.status_code}"}), 500
+            return f"Ollama API failed with status {response.status_code}"
 
-        # accumulate response
         result = []
-        done = False
-
-        # Parse the response stream chunk by chunk
         for line in response.iter_lines():
-            if line:  # Skip empty lines
+            if line:
                 try:
                     chunk = json.loads(line)
-                    # print("Received chunk:", chunk)  # Debugging
-
-                    if isinstance(chunk, dict):
-                        # The Ollama API returns a list of events; process each
-                        if 'choices' in chunk and isinstance(chunk['choices'], list):
-                            for choice in chunk['choices']:
-                                if isinstance(choice, dict) and 'delta' in choice:
-                                    delta = choice['delta']
-                                    if isinstance(delta, str):
-                                        result.append(delta)
-                                    elif isinstance(delta, dict):
-                                        # Handle both string and dict deltas
-                                        if 'content' in delta:
-                                            result.append(delta['content'])
-                        elif 'response' in chunk:
-                            result.append(chunk['response'])
-
-                        # Check if the current chunk indicates completion
-                        if 'done' in chunk and chunk['done'] is True:
-                            done = True
-                            break
+                    if 'choices' in chunk and isinstance(chunk['choices'], list):
+                        for choice in chunk['choices']:
+                            if 'delta' in choice and 'content' in choice['delta']:
+                                result.append(choice['delta']['content'])
+                    elif 'response' in chunk:
+                        result.append(chunk['response'])
                 except Exception as e:
                     print(f"Error parsing chunk: {e}")
                     continue
 
-        if not done:
-            print("Ollama API response stream did not complete properly.")
-            return jsonify({"error": "Ollama API response stream terminated unexpectedly"}), 500
+        return ''.join(result).strip() or "No response"
 
-        # Combine all chunks into the final response
-        full_response = ''.join(result).strip()
+    except Exception as e:
+        return str(e)
 
-        if not full_response:
-            return jsonify({"error": "Ollama API returned an empty result"}), 500
+@app.route("/analyze_file", methods=["POST"])
+def analyze_c_file():
+    try:
+        # Receive the uploaded file from the request
+        c_file = request.files.get("file")
+        if not c_file:
+            return jsonify({"error": "C file is required"}), 400
 
-        return jsonify({"result": full_response}), 200
+        # Read the file content
+        c_file_content = c_file.read().decode("utf-8")
+        if not c_file_content:
+            return jsonify({"error": "C file is empty"}), 400
+
+        # Extract individual functions from the file
+        functions = extract_functions(c_file_content)
+        if not functions:
+            return jsonify({"error": "No functions found in the C file"}), 400
+
+        # Analyze each function
+        file_results = []
+        for function in functions:
+            result = analyze_function_with_ollama(function)
+            file_results.append({"function": function, "result": result})
+
+        return jsonify({
+            "results": [
+                {
+                    "file": c_file.filename,
+                    "functions": file_results
+                }
+            ]
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
