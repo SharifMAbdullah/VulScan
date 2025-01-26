@@ -1,38 +1,12 @@
-from flask import Flask, request, jsonify
 import requests
 import json
-import re
-from textwrap import dedent
-
-app = Flask(__name__)
-
-def extract_functions(c_file_content):
-    """
-    Extract individual C functions from the given C file content.
-    """
-    # Regex to match C function definitions
-    function_pattern = re.compile(
-        r"""
-        # Match the return type (e.g., int, void, float, etc.)
-        (?:\b(?:int|void|char|float|double|long|short|struct)\b\s+)
-        # Match pointers or whitespace before function name
-        \**\w+\s*
-        # Match function arguments in parentheses
-        \([^)]*\)\s*
-        # Match function body enclosed in braces
-        \{
-            (?:[^{}]*\{[^{}]*\}[^{}]*)*[^{}]*
-        \}
-        """,
-        re.DOTALL | re.VERBOSE,
-    )
-    return function_pattern.findall(c_file_content)
+from utils.extraction import extract_functions
 
 def analyze_function_with_ollama(function):
     """
     Analyze a single C function for vulnerabilities using the Ollama API.
     """
-    prompt = dedent(f"""
+    prompt = f"""
         Analyze the following C code for potential vulnerabilities and provide ratings for the following metrics. Provide only the metrics, no reasoning.
 
         - Confidentiality
@@ -53,7 +27,7 @@ def analyze_function_with_ollama(function):
         AttackOrigin: [Remote/Local]
         AuthenticationRequired: [Single/None]
         Complexity: [High/Medium/Low/None]
-    """).strip()
+    """.strip()
 
     try:
         response = requests.post(
@@ -84,41 +58,36 @@ def analyze_function_with_ollama(function):
     except Exception as e:
         return str(e)
 
-@app.route("/analyze_file", methods=["POST"])
-def analyze_c_file():
-    try:
-        # Receive the uploaded file from the request
-        c_file = request.files.get("file")
-        if not c_file:
-            return jsonify({"error": "C file is required"}), 400
+def analyze_c_files(c_files):
+    """
+    Analyze all extracted C files and return the results.
+    """
+    results = []
 
-        # Read the file content
-        c_file_content = c_file.read().decode("utf-8")
-        if not c_file_content:
-            return jsonify({"error": "C file is empty"}), 400
+    for c_file in c_files:
+        with open(c_file, "r") as file:
+            c_file_content = file.read()
 
-        # Extract individual functions from the file
         functions = extract_functions(c_file_content)
         if not functions:
-            return jsonify({"error": "No functions found in the C file"}), 400
+            results.append({
+                "file": c_file,
+                "functions": [],
+                "error": "No functions found in this file"
+            })
+            continue
 
-        # Analyze each function
-        file_results = []
+        function_results = []
         for function in functions:
             result = analyze_function_with_ollama(function)
-            file_results.append({"function": function, "result": result})
+            function_results.append({
+                "function": function,
+                "result": result
+            })
 
-        return jsonify({
-            "results": [
-                {
-                    "file": c_file.filename,
-                    "functions": file_results
-                }
-            ]
-        }), 200
+        results.append({
+            "file": c_file,
+            "functions": function_results
+        })
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    return results
