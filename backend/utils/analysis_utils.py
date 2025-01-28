@@ -187,3 +187,86 @@ def analyze_c_files(c_files):
 #         })
 
 #     return results
+###############
+# from utils.extraction import extract_functions
+# from utils.rag_utils import analyze_function_with_rag_and_kb
+# from utils.indexing import VectorIndex
+
+# def analyze_c_files_with_rag(c_files, index_path="index"):
+#     """
+#     Analyze C files using the RAG pipeline.
+#     """
+#     index = VectorIndex(index_path=index_path)
+#     results = []
+
+#     for c_file in c_files:
+#         with open(c_file, "r") as file:
+#             c_file_content = file.read()
+
+#         functions = extract_functions(c_file_content)
+#         if not functions:
+#             results.append({
+#                 "file": c_file,
+#                 "functions": [],
+#                 "error": "No functions found in this file"
+#             })
+#             continue
+
+#         function_results = []
+#         for function in functions:
+#             result = analyze_function_with_rag(function, index)
+#             function_results.append({
+#                 "function": function,
+#                 "result": result
+#             })
+
+#         results.append({
+#             "file": c_file,
+#             "functions": function_results
+#         })
+
+#     return results
+
+# #############
+# from utils.rag_utils import analyze_function_with_rag_and_kb
+# from utils.indexing import VectorIndex
+# from utils.extraction import extract_functions
+
+# def analyze_c_files_with_kb(c_files, index_path="index", kb_path="KB.json"):
+#     """
+#     Analyze C files using RAG with knowledge base integration.
+#     """
+#     index = VectorIndex(index_path=index_path)
+    
+#     # Load KB into the index if not already loaded
+#     if not os.path.exists(f"{index_path}_metadata.json"):
+#         index.load_kb_to_index(kb_path)
+
+#     results = []
+#     for c_file in c_files:
+#         with open(c_file, "r") as file:
+#             c_file_content = file.read()
+
+#         functions = extract_functions(c_file_content)
+#         if not functions:
+#             results.append({
+#                 "file": c_file,
+#                 "functions": [],
+#                 "error": "No functions found in this file"
+#             })
+#             continue
+
+#         function_results = []
+#         for function in functions:
+#             result = analyze_function_with_rag_and_kb(function, index)
+#             function_results.append({
+#                 "function": function,
+#                 "result": result
+#             })
+
+#         results.append({
+#             "file": c_file,
+#             "functions": function_results
+#         })
+
+#     return results
