@@ -1,6 +1,7 @@
 import requests
 import json
-from utils.extraction import extract_functions
+from utils.extraction import extract_function_signatures, extract_functions
+from utils.cvss_utils import parse_ollama_result, calculate_cvss_score
 
 def analyze_function_with_ollama(function):
     """
@@ -12,21 +13,23 @@ def analyze_function_with_ollama(function):
         - Confidentiality
         - Integrity
         - Availability
-        - Access Gained
+        - Privileges Required
         - Attack Origin
-        - Authentication Required
+        - User Interaction Required
         - Complexity
+        - Scope
 
         Code: {function}
 
         Response format:
-        Confidentiality: [Complete/Partial/None]
-        Integrity: [Complete/Partial/None]
-        Availability: [Complete/Partial/None]
-        AccessGained: [Admin/User/None]
-        AttackOrigin: [Remote/Local]
-        AuthenticationRequired: [Single/None]
-        Complexity: [High/Medium/Low/None]
+        Confidentiality: [High/Low/None]
+        Integrity: [High/Low/None]
+        Availability: [High/Low/None]
+        PrivilegesRequired: [Admin/User/None]
+        AttackOrigin: [Network/Adjacent/Local/Physical/None]
+        UserInteraction: [Required/None]
+        Complexity: [High/Low/None]
+        Scope: [Changed/Unchanged]
     """.strip()
 
     try:
@@ -58,6 +61,7 @@ def analyze_function_with_ollama(function):
     except Exception as e:
         return str(e)
 
+
 def analyze_c_files(c_files):
     """
     Analyze all extracted C files and return the results.
@@ -80,9 +84,12 @@ def analyze_c_files(c_files):
         function_results = []
         for function in functions:
             result = analyze_function_with_ollama(function)
+            # Calculate CVSS score
+            cvss_result = calculate_cvss_score(result)
             function_results.append({
-                "function": function,
-                "result": result
+                "function": extract_function_signatures(function),
+                # "result": result,
+                "cvss_score": cvss_result
             })
 
         results.append({
