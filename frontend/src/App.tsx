@@ -1,42 +1,70 @@
-import React, { useState } from 'react';
-import Header from './components/Header';
-import FileUpload from './components/FileUpload';
-import Loader from './components/loader';
-import ScanReportButton from './components/scanReportButton';
+import * as React from "react";
+import { useState } from "react";
+import Header from "./components/header";
+import FileUpload from "./components/fileUpload";
+import Loader from "./components/loader";
+import ScanReportButton from "./components/scanReportButton";
 
 const App: React.FC = () => {
-  const [isFileUploaded, setIsFileUploaded] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isScanComplete, setIsScanComplete] = useState<boolean>(false);
+  const [scanResults, setScanResults] = useState<any>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  const handleFileUpload = (): void => {
-    setIsFileUploaded(true);
+  const handleFileUpload = (file: File): void => {
+    setUploadedFile(file);
+  };
+
+  const handleScan = async () => {
+    if (!uploadedFile) return alert("Please upload a file first!");
+
     setIsProcessing(true);
+    setIsScanComplete(false);
 
-    // Simulate file processing
-    setTimeout(() => {
-      setIsProcessing(false);
+    const formData = new FormData();
+    formData.append("file", uploadedFile);
+
+    try {
+      const response = await fetch("http://127.0.0.1:5000/analyze_zip", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to analyze file.");
+      }
+
+      const data = await response.json();
+      setScanResults(data.results);
       setIsScanComplete(true);
-    }, 3000); // Simulate a 3-second process
+    } catch (error) {
+      alert("Error processing file.");
+      console.error(error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-100">
       <Header />
       <div className="flex flex-col items-center justify-center py-10">
-        {!isFileUploaded && (
-          <FileUpload handleFileUpload={handleFileUpload} />
-        )}
+        {!uploadedFile && <FileUpload handleFileUpload={handleFileUpload} />}
         {isProcessing && <Loader />}
-        {isFileUploaded && !isProcessing && (
+        {uploadedFile && !isProcessing && !isScanComplete && (
           <button
-            onClick={() => alert('Scanning...')}
+            onClick={handleScan}
             className="bg-blue-600 text-white font-semibold px-4 py-2 rounded mt-4"
           >
             Scan For Vulnerabilities
           </button>
         )}
-        {isScanComplete && <ScanReportButton />}
+        {isScanComplete && scanResults && (
+          <div className="mt-6">
+            <h2 className="text-lg font-bold">Scan Complete!</h2>
+            <ScanReportButton />
+          </div>
+        )}
       </div>
     </div>
   );

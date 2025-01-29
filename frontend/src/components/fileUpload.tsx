@@ -1,13 +1,13 @@
-import React from 'react';
+import React from "react";
 
 interface FileUploadProps {
-  handleFileUpload: () => void;
+  handleFileUpload: (file: File) => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ handleFileUpload }) => {
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
     if (event.target.files && event.target.files.length > 0) {
-      handleFileUpload();
+      handleFileUpload(event.target.files[0]);
     }
   };
 

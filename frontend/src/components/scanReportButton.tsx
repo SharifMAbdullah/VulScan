@@ -1,9 +1,9 @@
-import React from 'react';
+import React from "react";
 
 const ScanReportButton: React.FC = () => {
-  const handleDownload = (): void => {
-    alert('Downloading scan report...');
-  };
+const handleDownload = () => {
+  window.open("http://127.0.0.1:5000/download_report", "_blank");
+};
 
   return (
     <button
