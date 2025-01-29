@@ -2,6 +2,7 @@ import requests
 import json
 from utils.extraction import extract_function_signatures, extract_functions
 from utils.cvss_utils import parse_ollama_result, calculate_cvss_score
+from utils.summary_fixes_utils import get_summary_and_fixes
 
 def analyze_function_with_ollama(function):
     """
@@ -61,7 +62,6 @@ def analyze_function_with_ollama(function):
     except Exception as e:
         return str(e)
 
-
 def analyze_c_files(c_files):
     """
     Analyze all extracted C files and return the results.
@@ -86,10 +86,19 @@ def analyze_c_files(c_files):
             result = analyze_function_with_ollama(function)
             # Calculate CVSS score
             cvss_result = calculate_cvss_score(result)
+            
+            # Generate summary and fixes if CVSS score > 4
+            summary_fixes = None
+            if isinstance(cvss_result, dict) and cvss_result.get("base_score", 0) > 4:
+                summary_fixes = get_summary_and_fixes(function, cvss_result)
+                if summary_fixes is None or "error" in summary_fixes:
+                    summary_fixes = None
+
             function_results.append({
                 "function": extract_function_signatures(function),
-                # "result": result,
-                "cvss_score": cvss_result
+                "cvss_score": cvss_result,
+                "summary": summary_fixes.get("summary") if summary_fixes else None,
+                "fixes": summary_fixes.get("fixes") if summary_fixes else None
             })
 
         results.append({

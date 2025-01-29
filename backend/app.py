@@ -1,3 +1,4 @@
+from utils.generate_pdf import generate_vulnerability_report
 from flask import Flask, request, jsonify # type: ignore
 from utils.file_utils import handle_zip_file
 from utils.analysis_utils import analyze_c_files
@@ -20,7 +21,9 @@ def analyze_zip_file():
         # Analyze all extracted C files
         results = analyze_c_files(extracted_files)
 
+        generate_vulnerability_report(results)
         return jsonify({"results": results}), 200
+
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
